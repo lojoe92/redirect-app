@@ -635,7 +635,7 @@ app.get('/:slug', (req, res) => {
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
-app.listen(PORT, '127.0.0.1', () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Redirect app running on port ${PORT}`);
   console.log(`Admin: ${BASE_URL}/admin`);
 });
