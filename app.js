@@ -8,7 +8,7 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const BASE_URL = (process.env.BASE_URL || 'https://redirects.sweetsmilingsoul.com').replace(/\/$/, '');
+const BASE_URL = (process.env.BASE_URL || 'https://your-domain.com').replace(/\/$/, '');
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'changeme';
 
