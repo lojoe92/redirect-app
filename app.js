@@ -161,7 +161,7 @@ app.get('/admin', auth, (req, res) => {
     const active = currentSort === col;
     const nextDir = active && currentDir === 'asc' ? 'desc' : 'asc';
     const arrow = active ? (currentDir === 'asc' ? ' ▲' : ' ▼') : '';
-    return \`<a href="/admin?sort=\${col}&dir=\${nextDir}" style="text-decoration:none;color:inherit">\${label}\${arrow}</a>\`;
+    return '<a href="/admin?sort=' + col + '&dir=' + nextDir + '" style="text-decoration:none;color:inherit">' + label + arrow + '</a>';
   }
 
   const { error, success } = req.query;
