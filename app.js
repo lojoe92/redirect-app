@@ -65,7 +65,7 @@ const SHARED_CSS = `
   .nav-link { padding: 6px 14px; border-radius: 6px; font-size: 0.88rem; font-weight: 500; text-decoration: none; color: #555; }
   .nav-link:hover { background: #f0eee9; color: #222; }
   .nav-link.active { background: #f0eee9; color: #7c4fa0; }
-  .container { max-width: 960px; margin: 32px auto; padding: 0 24px; }
+  .container { max-width: 1200px; margin: 32px auto; padding: 0 24px; }
   .card { background: #fff; border: 1px solid #e0ddd8; border-radius: 10px; padding: 24px; margin-bottom: 24px; }
   .card h2 { font-size: 0.85rem; font-weight: 600; margin-bottom: 20px; color: #888; text-transform: uppercase; letter-spacing: .06em; }
   .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -90,7 +90,11 @@ const SHARED_CSS = `
   th { text-align: left; padding: 8px 12px; border-bottom: 2px solid #e8e5de; font-size: 0.78rem; text-transform: uppercase; letter-spacing: .05em; color: #888; }
   td { padding: 11px 12px; border-bottom: 1px solid #f0eee9; vertical-align: middle; }
   tr:last-child td { border-bottom: none; }
-  .slug-cell { font-family: monospace; font-size: 0.88rem; color: #7c4fa0; }
+  .slug-cell { font-family: monospace; font-size: 0.88rem; color: #7c4fa0; white-space: nowrap; }
+  .slug-cell-wrap { display: flex; align-items: center; gap: 6px; }
+  .copy-btn { background: none; border: 1px solid #d4d0ca; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 0.75rem; color: #888; }
+  .copy-btn:hover { background: #f0eee9; color: #555; }
+  .copy-btn.copied { border-color: #a8d5a8; color: #2e6b2e; }
   .dest-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; font-size: 0.82rem; }
   .count { font-weight: 600; }
   .count-month { color: #888; font-size: 0.82rem; }
@@ -167,25 +171,20 @@ app.get('/admin', auth, (req, res) => {
     <div class="card">
       <h2>Create new redirect</h2>
       <form method="POST" action="/admin/links">
-        <div class="form-row">
-          <div class="form-group" style="flex:2">
-            <label>Slug</label>
-            <div class="slug-prefix">
-              <span>${BASE_URL}/</span>
-              <input type="text" name="slug" placeholder="dollhouse-first-page-section" required autocomplete="off">
-            </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Slug</label>
+          <div class="slug-prefix">
+            <span>${BASE_URL}/</span>
+            <input type="text" name="slug" placeholder="dollhouse-first-page-section" required autocomplete="off">
           </div>
-          <div class="form-group" style="flex:2">
-            <label>Destination URL</label>
-            <input type="text" name="destination" placeholder="https://youtu.be/b90pgHz6mk0?t=863" required autocomplete="off">
-          </div>
-          <div class="form-group" style="flex:0; justify-content:flex-end">
-            <label>&nbsp;</label>
-            <div style="display:flex;gap:8px">
-              <button type="submit" class="btn btn-primary">Create + QR</button>
-              <a href="/admin/bulk" class="btn btn-secondary">Bulk upload</a>
-            </div>
-          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label>Destination URL</label>
+          <input type="text" name="destination" placeholder="https://youtu.be/b90pgHz6mk0?t=863" required autocomplete="off">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button type="submit" class="btn btn-primary">Create + QR</button>
+          <a href="/admin/bulk" class="btn btn-secondary">Bulk upload</a>
         </div>
       </form>
     </div>
@@ -207,7 +206,7 @@ app.get('/admin', auth, (req, res) => {
         <tbody>
           ${links.map(l => `
           <tr>
-            <td class="slug-cell">/${l.slug}</td>
+            <td class="slug-cell"><div class="slug-cell-wrap">/${l.slug} <button class="copy-btn" onclick="copySlug(this,'${BASE_URL}/${l.slug}')">Copy</button></div></td>
             <td class="dest-cell" title="${l.destination}">${l.destination}</td>
             <td><span class="count">${l.total_clicks || 0}</span></td>
             <td><span class="count-month">${l.clicks_this_month || 0}</span></td>
@@ -224,6 +223,15 @@ app.get('/admin', auth, (req, res) => {
     </div>
 
   </div>
+  <script>
+  function copySlug(btn, url) {
+    navigator.clipboard.writeText(url).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+    });
+  }
+  </script>
 </body>
 </html>`);
 });
