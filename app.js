@@ -21,6 +21,7 @@ db.exec(`
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     slug        TEXT    UNIQUE NOT NULL,
     destination TEXT    NOT NULL,
+    product     TEXT    DEFAULT '',
     created_at  TEXT    DEFAULT (datetime('now'))
   );
   CREATE TABLE IF NOT EXISTS clicks (
@@ -30,6 +31,9 @@ db.exec(`
     FOREIGN KEY (link_id) REFERENCES links(id)
   );
 `);
+
+// Add product column if missing (existing databases)
+try { db.exec("ALTER TABLE links ADD COLUMN product TEXT DEFAULT ''"); } catch(e) {}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -171,11 +175,17 @@ app.get('/admin', auth, (req, res) => {
     <div class="card">
       <h2>Create new redirect</h2>
       <form method="POST" action="/admin/links">
-        <div class="form-group" style="margin-bottom:12px">
-          <label>Slug</label>
-          <div class="slug-prefix">
-            <span>${BASE_URL}/</span>
-            <input type="text" name="slug" placeholder="dollhouse-first-page-section" required autocomplete="off">
+        <div class="form-row" style="margin-bottom:12px">
+          <div class="form-group" style="flex:1">
+            <label>Product <span style="color:#aaa;font-weight:400">(optional)</span></label>
+            <input type="text" name="product" placeholder="dollhouse" autocomplete="off">
+          </div>
+          <div class="form-group" style="flex:3">
+            <label>Slug</label>
+            <div class="slug-prefix">
+              <span>${BASE_URL}/</span>
+              <input type="text" name="slug" placeholder="dollhouse-first-page-section" required autocomplete="off">
+            </div>
           </div>
         </div>
         <div class="form-group" style="margin-bottom:16px">
@@ -195,6 +205,7 @@ app.get('/admin', auth, (req, res) => {
       <table>
         <thead>
           <tr>
+            <th>Product</th>
             <th>Slug</th>
             <th>Destination</th>
             <th>Total clicks</th>
@@ -206,6 +217,7 @@ app.get('/admin', auth, (req, res) => {
         <tbody>
           ${links.map(l => `
           <tr>
+            <td style="color:#888;font-size:0.82rem">${l.product || '—'}</td>
             <td class="slug-cell"><div class="slug-cell-wrap">/${l.slug} <button class="copy-btn" onclick="copySlug(this,'${BASE_URL}/${l.slug}')">Copy</button></div></td>
             <td class="dest-cell" title="${l.destination}">${l.destination}</td>
             <td><span class="count">${l.total_clicks || 0}</span></td>
@@ -242,12 +254,13 @@ app.get('/admin', auth, (req, res) => {
 app.post('/admin/links', auth, async (req, res) => {
   const slug = normalizeSlug(req.body.slug || '');
   const destination = (req.body.destination || '').trim();
+  const product = (req.body.product || '').trim();
 
   if (!slug || !destination) return res.redirect('/admin?error=missing_fields');
   if (RESERVED_SLUGS.has(slug)) return res.redirect('/admin?error=reserved');
 
   try {
-    db.prepare('INSERT INTO links (slug, destination) VALUES (?, ?)').run(slug, destination);
+    db.prepare('INSERT INTO links (slug, destination, product) VALUES (?, ?, ?)').run(slug, destination, product);
     await generateQR(slug);
     res.redirect('/admin?success=1');
   } catch (err) {
@@ -560,7 +573,7 @@ app.post('/admin/bulk', auth, async (req, res) => {
       results.push({ line, status: 'err', msg: 'Not enough columns' });
       continue;
     }
-    // product is parts[0] (ignored), slug is parts[1], destination is rest joined
+    const product = (parts[0] || '').trim();
     const slug = normalizeSlug(parts[1]);
     const destination = parts.slice(2).join(',').trim();
 
@@ -574,7 +587,7 @@ app.post('/admin/bulk', auth, async (req, res) => {
     }
 
     try {
-      db.prepare('INSERT INTO links (slug, destination) VALUES (?, ?)').run(slug, destination);
+      db.prepare('INSERT INTO links (slug, destination, product) VALUES (?, ?, ?)').run(slug, destination, product);
       await generateQR(slug);
       results.push({ line, status: 'ok', msg: `/${slug} created` });
     } catch (err) {
