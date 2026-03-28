@@ -144,24 +144,32 @@ const auth = basicAuth({
 app.get('/admin', auth, (req, res) => {
   const sortCol = { product: 'l.product', slug: 'l.slug', destination: 'l.destination' }[req.query.sort] || 'l.created_at';
   const sortDir = req.query.dir === 'asc' ? 'ASC' : 'DESC';
-  const links = db.prepare(`
-    SELECT
-      l.*,
-      COUNT(c.id) AS total_clicks,
-      SUM(CASE WHEN strftime('%Y-%m', c.clicked_at) = strftime('%Y-%m', 'now') THEN 1 ELSE 0 END) AS clicks_this_month
-    FROM links l
-    LEFT JOIN clicks c ON c.link_id = l.id
-    GROUP BY l.id
-    ORDER BY ${sortCol} ${sortDir}
-  `).all();
+  const filterProduct = (req.query.product || '').trim();
+  const whereClause = filterProduct ? "WHERE l.product = '" + filterProduct.replace(/'/g, "''") + "'" : '';
+  const links = db.prepare(
+    'SELECT l.*, COUNT(c.id) AS total_clicks,' +
+    " SUM(CASE WHEN strftime('%Y-%m', c.clicked_at) = strftime('%Y-%m', 'now') THEN 1 ELSE 0 END) AS clicks_this_month" +
+    ' FROM links l LEFT JOIN clicks c ON c.link_id = l.id ' +
+    whereClause +
+    ' GROUP BY l.id ORDER BY ' + sortCol + ' ' + sortDir
+  ).all();
+
+  const products = db.prepare("SELECT DISTINCT product FROM links WHERE product != '' ORDER BY product").all().map(r => r.product);
 
   const currentSort = req.query.sort || '';
   const currentDir = req.query.dir || 'desc';
+  function queryString(overrides) {
+    const params = { sort: currentSort, dir: currentDir, product: filterProduct };
+    Object.assign(params, overrides);
+    const parts = [];
+    for (const [k, v] of Object.entries(params)) { if (v) parts.push(k + '=' + encodeURIComponent(v)); }
+    return parts.length ? '?' + parts.join('&') : '';
+  }
   function sortLink(col, label) {
     const active = currentSort === col;
     const nextDir = active && currentDir === 'asc' ? 'desc' : 'asc';
     const arrow = active ? (currentDir === 'asc' ? ' ▲' : ' ▼') : '';
-    return '<a href="/admin?sort=' + col + '&dir=' + nextDir + '" style="text-decoration:none;color:inherit">' + label + arrow + '</a>';
+    return '<a href="/admin' + queryString({ sort: col, dir: nextDir }) + '" style="text-decoration:none;color:inherit">' + label + arrow + '</a>';
   }
 
   const { error, success } = req.query;
@@ -211,7 +219,15 @@ app.get('/admin', auth, (req, res) => {
     </div>
 
     <div class="card">
-      <h2>All links</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h2 style="margin-bottom:0">All links</h2>
+        ${products.length > 0 ? `
+        <div style="display:flex;align-items:center;gap:8px;font-size:0.82rem">
+          <span style="color:#888">Filter:</span>
+          <a href="/admin${queryString({ product: '' })}" class="btn btn-sm ${!filterProduct ? 'btn-primary' : 'btn-secondary'}">All</a>
+          ${products.map(p => `<a href="/admin${queryString({ product: p })}" class="btn btn-sm ${filterProduct === p ? 'btn-primary' : 'btn-secondary'}">${p}</a>`).join('')}
+        </div>` : ''}
+      </div>
       ${links.length === 0 ? '<p class="empty">No links yet. Create your first one above.</p>' : `
       <table>
         <thead>
@@ -219,10 +235,9 @@ app.get('/admin', auth, (req, res) => {
             <th>${sortLink('product', 'Product')}</th>
             <th>${sortLink('slug', 'Slug')}</th>
             <th>${sortLink('destination', 'Destination')}</th>
-            <th>Total clicks</th>
+            <th>Clicks</th>
             <th>This month</th>
-            <th>Created</th>
-            <th>Actions</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -240,13 +255,15 @@ app.get('/admin', auth, (req, res) => {
             <td class="dest-cell" title="${l.destination}">${l.destination}</td>
             <td><span class="count">${l.total_clicks || 0}</span></td>
             <td><span class="count-month">${l.clicks_this_month || 0}</span></td>
-            <td class="date-cell">${l.created_at.slice(0, 10)}</td>
-            <td class="actions">
-              <a href="/qrcodes/${encodeURIComponent(l.slug)}.png" download="${l.slug}.png" class="btn btn-secondary btn-sm">⬇ QR</a>
-              <button class="btn btn-secondary btn-sm" onclick="editProduct(${l.id})">Edit</button>
-              <form method="POST" action="/admin/links/${l.id}/delete" style="display:inline" onsubmit="return confirm('Delete /${l.slug}?')">
-                <button type="submit" class="btn btn-danger">Delete</button>
-              </form>
+            <td>
+              <div class="date-cell" style="margin-bottom:4px">${l.created_at.slice(0, 10)}</div>
+              <div class="actions">
+                <a href="/qrcodes/${encodeURIComponent(l.slug)}.png" download="${l.slug}.png" class="btn btn-secondary btn-sm">⬇ QR</a>
+                <button class="btn btn-secondary btn-sm" onclick="editProduct(${l.id})">Edit</button>
+                <form method="POST" action="/admin/links/${l.id}/delete" style="display:inline" onsubmit="return confirm('Delete /${l.slug}?')">
+                  <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+              </div>
             </td>
           </tr>`).join('')}
         </tbody>
