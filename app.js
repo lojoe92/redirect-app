@@ -142,6 +142,8 @@ const auth = basicAuth({
 // Admin – list links
 // ---------------------------------------------------------------------------
 app.get('/admin', auth, (req, res) => {
+  const sortCol = { product: 'l.product', slug: 'l.slug', destination: 'l.destination' }[req.query.sort] || 'l.created_at';
+  const sortDir = req.query.dir === 'asc' ? 'ASC' : 'DESC';
   const links = db.prepare(`
     SELECT
       l.*,
@@ -150,8 +152,17 @@ app.get('/admin', auth, (req, res) => {
     FROM links l
     LEFT JOIN clicks c ON c.link_id = l.id
     GROUP BY l.id
-    ORDER BY l.created_at DESC
+    ORDER BY ${sortCol} ${sortDir}
   `).all();
+
+  const currentSort = req.query.sort || '';
+  const currentDir = req.query.dir || 'desc';
+  function sortLink(col, label) {
+    const active = currentSort === col;
+    const nextDir = active && currentDir === 'asc' ? 'desc' : 'asc';
+    const arrow = active ? (currentDir === 'asc' ? ' ▲' : ' ▼') : '';
+    return \`<a href="/admin?sort=\${col}&dir=\${nextDir}" style="text-decoration:none;color:inherit">\${label}\${arrow}</a>\`;
+  }
 
   const { error, success } = req.query;
 
@@ -205,9 +216,9 @@ app.get('/admin', auth, (req, res) => {
       <table>
         <thead>
           <tr>
-            <th>Product</th>
-            <th>Slug</th>
-            <th>Destination</th>
+            <th>${sortLink('product', 'Product')}</th>
+            <th>${sortLink('slug', 'Slug')}</th>
+            <th>${sortLink('destination', 'Destination')}</th>
             <th>Total clicks</th>
             <th>This month</th>
             <th>Created</th>
@@ -217,7 +228,14 @@ app.get('/admin', auth, (req, res) => {
         <tbody>
           ${links.map(l => `
           <tr>
-            <td style="color:#888;font-size:0.82rem">${l.product || '—'}</td>
+            <td style="color:#888;font-size:0.82rem">
+              <span id="prod-text-${l.id}" onclick="editProduct(${l.id})" style="cursor:pointer" title="Click to edit">${l.product || '—'}</span>
+              <form id="prod-form-${l.id}" method="POST" action="/admin/links/${l.id}/edit" style="display:none">
+                <input type="text" name="product" value="${l.product || ''}" style="width:90px;padding:3px 6px;font-size:0.82rem">
+                <button type="submit" class="btn btn-primary" style="padding:3px 8px;font-size:0.75rem">Save</button>
+                <button type="button" class="btn btn-secondary" style="padding:3px 8px;font-size:0.75rem" onclick="cancelEdit(${l.id})">Cancel</button>
+              </form>
+            </td>
             <td class="slug-cell"><div class="slug-cell-wrap">/${l.slug} <button class="copy-btn" onclick="copySlug(this,'${BASE_URL}/${l.slug}')">Copy</button></div></td>
             <td class="dest-cell" title="${l.destination}">${l.destination}</td>
             <td><span class="count">${l.total_clicks || 0}</span></td>
@@ -225,6 +243,7 @@ app.get('/admin', auth, (req, res) => {
             <td class="date-cell">${l.created_at.slice(0, 10)}</td>
             <td class="actions">
               <a href="/qrcodes/${encodeURIComponent(l.slug)}.png" download="${l.slug}.png" class="btn btn-secondary btn-sm">⬇ QR</a>
+              <button class="btn btn-secondary btn-sm" onclick="editProduct(${l.id})">Edit</button>
               <form method="POST" action="/admin/links/${l.id}/delete" style="display:inline" onsubmit="return confirm('Delete /${l.slug}?')">
                 <button type="submit" class="btn btn-danger">Delete</button>
               </form>
@@ -242,6 +261,15 @@ app.get('/admin', auth, (req, res) => {
       btn.classList.add('copied');
       setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
     });
+  }
+  function editProduct(id) {
+    document.getElementById('prod-text-' + id).style.display = 'none';
+    document.getElementById('prod-form-' + id).style.display = 'inline-flex';
+    document.getElementById('prod-form-' + id).querySelector('input').focus();
+  }
+  function cancelEdit(id) {
+    document.getElementById('prod-text-' + id).style.display = '';
+    document.getElementById('prod-form-' + id).style.display = 'none';
   }
   </script>
 </body>
@@ -271,6 +299,15 @@ app.post('/admin/links', auth, async (req, res) => {
       res.redirect('/admin?error=unknown');
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// Admin – edit link (product)
+// ---------------------------------------------------------------------------
+app.post('/admin/links/:id/edit', auth, (req, res) => {
+  const product = (req.body.product || '').trim();
+  db.prepare('UPDATE links SET product = ? WHERE id = ?').run(product, req.params.id);
+  res.redirect('/admin');
 });
 
 // ---------------------------------------------------------------------------
